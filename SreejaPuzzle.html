@@ -1,0 +1,354 @@
+
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+	<head>
+		<title>Slider Game</title>
+		<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8"/>
+		<style type="text/css">
+/* <![CDATA[ */
+body {
+	font-family: "Arial Unicode MS";
+}
+#foo {
+	padding-top: 3em;
+}
+.MagicSquare {
+width:200px;
+height:200px;
+	border: 1px solid #FFf;
+	background-color: #000;
+	-moz-border-radius: 0.5em;
+	-khtml-border-radius: 0.5em;
+	-webkit-border-radius: 0.5em;
+}
+.MagicSquare td {
+	background-color: white;
+	text-align: center;
+	vertical-align: middle;
+	width: 3em;
+	height: 3em;
+	font-size:20px;
+	cursor: pointer;
+/* border definitions */
+	border-width: 5px;
+	border-style: solid;
+	
+	border-top-color: #C0C0C0;
+	border-left-color: #C0C0C0;
+	border-right-color: #C0C0C0;
+	border-bottom-color: #C0C0C0;
+	
+}
+.MagicSquare td:active {
+	background-color: #FFF;
+	border-top-color: #FFF;
+	border-left-color: #FFF;
+	border-right-color: #FFF;
+	border-bottom-color: #FFF;
+}
+.MagicSquare td.void {
+	border: none;
+	background-color: #000;
+}
+.MagicSquare caption {
+	font-size: 0.9em;
+}
+.MagicSquare caption ul {
+	list-style-type: none;
+}
+.MagicSquare caption ul, .MagicSquare caption li {
+	padding: 0;
+	margin: 0;
+}
+.MagicSquare caption li span {
+	float: right;
+}
+/* ]]> */
+		</style>
+	</head>
+
+	<body>
+		
+		<div id="foo"/>
+		<script type="text/javascript">
+// <![CDATA[
+/* required to pass arrays by value */
+Array.prototype.clone = function ()
+{
+	var i, c = [];
+	for (i = this.length; i--;) {
+		if (i in this) {
+			c[i] = this[i];
+		}
+	}
+	return c;
+};
+/* let's create a game (namespace) */
+var GAME = {
+	author: "Sreeja",
+	date:   2015,
+	email:  "Sreeja@gmail.com"
+};
+/* collection of functions that are called from events */
+GAME.handlers = {};
+/* read the values from the input fields and create a new puzzle */
+GAME.handlers.create = function (evt)
+{
+	var r = 3,
+	    c = 3,
+	    game = new GAME.MagicSquare(c, r, "foo");
+};
+/* prevent any action, once a game is solved */
+GAME.handlers.cancel = function (evt)
+{
+	evt.stopPropagation();
+};
+/* switch place with the empty space, if adjacent */
+GAME.handlers.swap = function (evt)
+{
+	// don't switch with itself
+	if (!this.textContent) {
+		return false;
+	}
+	var td, 
+	    space = this.game.space,
+	    count = this.game.counter;
+
+	if (space.adjacent(this)) {
+		td = this.game.fields[space.row][space.col];
+		td.textContent    = this.textContent;
+		td.className      = "";
+		this.textContent  = "";
+		this.className    = "void";
+		space.row         = this.row;
+		space.col         = this.col;
+		count.textContent = parseInt(count.textContent, 10) + 1;
+		this.game.win();
+		return true;
+	}
+	return false;
+};
+/**
+ * [public - Constructor] create a new slider game.
+ *
+ * @param (int) w               number of columns
+ * @param (int) h               number of rows
+ * @param (string) id           element ID, wherein the field table is created
+ * @return (GAME.MagicSquare)   game object
+ * @throw (TypeError)           width/height not numbers
+ * @throw (ReferenceError)      container element undefined
+ */
+GAME.MagicSquare = function (w, h, id)
+{
+	// get the container element
+	this.wrapper = document.getElementById(id);
+	if (!this.wrapper) {
+		throw new ReferenceError("Container element does not exist.");
+	}
+	var table, i, res = ",",
+	    x = parseInt(h, 10),
+	    y = parseInt(w, 10);
+	this.rows    = (x > 1) ? x : 2;
+	this.columns = (y > 1) ? y : 2;
+	// create the result string necessary for win test
+	for (i = this.rows * this.columns; --i;) {
+		res += i + ",";
+	}
+	this.result  = res;
+	// delete previous game
+	this.wrapper.innerHTML = "";
+	// create table
+	table = this.createTable();
+	this.wrapper.appendChild(table);
+	// re-enable click events
+	this.wrapper.removeEventListener("click", GAME.handlers.cancel, true);
+	// start game timer
+	this.startTime = new Date(); // workaround for Opera
+	this.endTime   = NaN;
+}
+/**
+ * [private] shuffle an array
+ *
+ * @param (Array) a             array to shuffle
+ * @return (Array)              shuffled array
+ */
+GAME.MagicSquare.prototype.scramble = function (a)
+{
+	var i, index, values = [], c = a.clone();
+	
+	for (i = c.length; i--;) {
+		index = Math.round(Math.random() * 100 * i) % (i + 1);
+		values.push(c.splice(index, 1)[0]);
+	}
+	return values;
+};
+/** [private] test whether a configuration can be solved
+ *
+ * @param (Array) a             configuration array to test
+ * @return (bool)               insolvability of the configuration
+ */
+GAME.MagicSquare.prototype.unsolvable = function (a)
+{
+	var i, j, c = a.clone(),
+	    inversion = 0, 
+	    l    = c.length, 
+	    zero = c.indexOf(0), 
+	    cols = this.columns;
+	// move the 0 to the last row
+	j = l - cols;
+	while (zero < j) {
+		c[zero] = c[zero + cols];
+		c[zero + cols] = 0;
+		zero += cols;
+	}
+	// determine number of values, that are placed after its successors
+	for (i = l; i--;) {
+		for (j = i + 1; j < l; j += 1) {
+			if (c[i] > c[j] && c[j] > 0) {
+				inversion += 1;
+			}
+		}
+	}
+	// even number of "inversion" means solvable
+	if (1 === (inversion % 2)) {
+		return true;
+	}
+	return false;
+};
+/** 
+ * [private] create a HTMLTable that serves as the playing board.
+ *
+ * @return (HTMLTableElement)   table, with the scrambled numbers 
+ *                              and event handlers
+ */
+GAME.MagicSquare.prototype.createTable = function ()
+{
+	// create various HTMLElements
+	var doc   = document,
+	    table = doc.createElement("table"),
+	    cpt   = doc.createElement("caption"),
+	    tbody = doc.createElement("tbody"),
+	    tr    = doc.createElement("tr"),
+	    td    = doc.createElement("td"),
+	    span  = doc.createElement("span"),
+	    rows  = this.rows, 
+	    cols  = this.columns, 
+	    arr   = [],
+	    i, j, tr_i, td_j, num, values;
+	
+	// holds the reference to each TD element based on the col/row attributes
+	this.fields = [];
+	// create mixed and valid configuration
+	for (i = rows * cols; i--;) {
+		arr.push(i);
+	}
+	do {
+		values = this.scramble(arr);
+	}
+	while (this.unsolvable(values));
+	// table headers
+	span.textContent = 0;
+	this.counter     = span;
+	cpt.className    = "counter";
+	cpt.textContent  = "Moves: ";
+	cpt.appendChild(span);
+	table.appendChild(cpt);
+	table.className  = "MagicSquare";
+	// table rows
+	for (i = rows; i--;) {
+		tr_i = tr.cloneNode(false);
+		this.fields[rows - i] = [];
+		// table cells
+		for (j = cols; j--;) {
+			td_j = td.cloneNode(false);
+			td_j.row  = rows - i;
+			td_j.col  = cols - j;
+			// make the table cell an Observer
+			td_j.game = this;
+			// put cell reference in field matrix
+			this.fields[rows - i][cols - j] = td_j;
+			// get the number
+			num = values.shift();
+			// treat empty field (display)
+			if (0 === num) {
+				num = "";
+				td_j.className = "void";
+				// make an object, that represents the empty field
+				// and can test, whether a field is adjacent
+				this.space = {
+					row : rows - i,
+					col : cols - j,
+					adjacent : function (obj)
+					{
+						return ((Math.abs(this.row - obj.row) === 1) ^ (Math.abs(this.col - obj.col) === 1));
+					}
+				};
+			}
+			// assign number
+			td_j.textContent = num;
+			// assign click event
+			td_j.addEventListener("click", GAME.handlers.swap, false);
+			tr_i.appendChild(td_j);
+		}
+		tbody.appendChild(tr_i);
+	}
+	table.appendChild(tbody);
+	return table;
+};
+/** 
+ * [private] calculating the played time and formatting the table caption
+ * to show the results. disable tile movements.
+ *
+ * @return (void)
+ */
+GAME.MagicSquare.prototype.clearGame = function ()
+{
+	var time, seconds, minutes, hours, timeString,
+	    numMoves = this.counter.textContent;
+	// prevent further actions
+	this.wrapper.addEventListener("click", GAME.handlers.cancel, true);
+	// determine used time
+	time = Math.round((this.endTime - this.startTime) / 1000);
+	// format time
+	seconds = time % 60;
+	seconds = (seconds < 10) ? "0" + seconds : seconds;
+	minutes = ((time - seconds) / 60) % 60;
+	minutes = (minutes < 10) ? "0" + minutes : minutes;
+	hours   = ((time - seconds - (minutes * 60))) / 3600;
+	timeString = hours + ":" + minutes + ":" + seconds;
+	alert("Congratulations. You finished this game in " + numMoves + " moves and " + timeString);
+	// format table caption with result
+	this.counter.parentNode.style.textAlign = "left";
+	this.counter.parentNode.innerHTML = '<ul><li>Time: <span>' + timeString + '</span></li><li>Moves: <span>' + numMoves + '</span></li></ul>';
+};
+/**
+ * [private] determine end of game by comparing actual number distribution array
+ * with result number distribution array.
+ *
+ * @return (bool)               win condition matched
+ */
+GAME.MagicSquare.prototype.win = function ()
+{
+	var trs = this.wrapper.getElementsByTagName("td"),
+	    l   = trs.length,
+	    res = "";
+	// convert current configuration in string
+	while (l--) {
+		res += trs[l].textContent + ",";
+	}
+	// compare with result string for winning situation
+	if (res === this.result) {
+		this.endTime = new Date();
+		this.clearGame();
+		return true;
+	}
+	return false;
+};
+/*  */
+//document.getElementById("creator").addEventListener("click", GAME.handlers.create, false);
+window.addEventListener("load",GAME.handlers.create,false);
+// ]]>
+		</script>
+	</body>
+</html>
